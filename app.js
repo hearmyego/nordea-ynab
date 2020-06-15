@@ -1,66 +1,62 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
-const parseLine = require('./parseLine');
+const parseLine = require('./parseLine-dk');
 
 if (!process.argv[2]) {
-    console.log('File argument missing!')
-    process.exit(9);
+	console.log('File argument missing!');
+	process.exit(9);
 }
 
-const fileName = process.argv[2];
-const filePath = path.join(__dirname, fileName);
+const inputFileName = process.argv[2];
+const filePath = path.join(__dirname, inputFileName);
+
+var filename = path.basename(filePath);
+var savePath = path.dirname(filePath);
+
+const outputFileName = 'ynab-' + filename;
 
 const lineReader = readline.createInterface({
-  input: fs.createReadStream(filePath)
+	input: fs.createReadStream(filePath, { encoding: 'latin1' })
 });
 
 let rowCounter = 0;
 let payments = [];
 
-lineReader.on('line', (line) => {
-    rowCounter++;
+lineReader.on('line', line => {
+	rowCounter++;
 
-    // Row 1 is header with account number, row 2 is empty, row 3 is the header row
-    if (rowCounter === 1 || rowCounter === 3) {
-        return;
-    }
+	// Row 1 is empty and row 2 is the header row
+	if (rowCounter === 1 || rowCounter === 2) {
+		return;
+	}
 
-    const payment = parseLine(line);
+	const payment = parseLine(line);
 
-    if (payment) {
-        payments.push(payment);
-    }
+	if (payment) {
+		payments.push(payment);
+	}
 });
 
 lineReader.on('close', () => {
-    if (payments.length === 0) {
-        console.log('No payments parsed!')
-        process.exit(1);
-    }
+	if (payments.length === 0) {
+		console.log('No payments parsed!');
+		process.exit(1);
+	}
 
-    const outputName = 'nordea-ynab-' + Date.now() + '.csv';
+	const output = fs.createWriteStream(outputFileName, { encoding: 'utf8' });
 
-    const output = fs.createWriteStream(outputName);
+	output.on('error', err => {
+		console.log(err);
+	});
 
-    output.on('error', (err) => {
-        console.log(err);
-    });
+	output.write('Date,Payee,Memo,Outflow,Inflow' + '\n');
 
-    output.write('Date,Payee,Memo,Outflow,Inflow' + '\n')
+	payments.forEach(payment => {
+		const paymentArr = [payment.date, payment.payee, payment.memo, payment.outflow, payment.inflow];
 
-    payments.forEach((payment) => {
-        const paymentArr = [
-            payment.date,
-            payment.payee,
-            payment.memo,
-            payment.outflow,
-            payment.inflow
-        ];
+		output.write(paymentArr.join(',') + '\n');
+	});
 
-        output.write(paymentArr.join(',') + '\n');
-    });
-
-    output.end();
+	output.end();
 });
-
